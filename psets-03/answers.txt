@@ -1,0 +1,11 @@
+sort1 uses: Bubble Sort
+
+How do you know?: sort1 performs quickly on smaller inputs but becomes slower for large random and reversed inputs, while remaining fast for already sorted input. This behavior matches bubble sort with an early-exit optimization, which finishes quickly when no swaps are needed but degrades toward O(n²) performance for unsorted data.
+
+sort2 uses: Merge Sort
+
+How do you know?: sort2 is consistently fast for all input sizes and orders, including random, reversed, and sorted data. Its performance scales efficiently even for large inputs like 50000 numbers. This behavior is characteristic of merge sort, which runs in O(n log n) time regardless of input order.
+
+sort3 uses: Selection Sort
+
+How do you know?: sort3 slows significantly as input size increases and does not consistently benefit from sorted input. This behavior matches selection sort, which repeatedly scans the unsorted portion of the list to find the smallest element, resulting in O(n²) runtime regardless of the input’s initial order.
