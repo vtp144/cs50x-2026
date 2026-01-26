@@ -1,0 +1,7 @@
+1. Audio Aura
+
+Based on the average energy, valence, and danceability of the songs in songs.db, the listener’s audio aura appears energetic, upbeat, and danceable. The music suggests a preference for lively, popular songs with a generally positive emotional tone.
+
+2. Limitations and Improvements
+
+This calculation may not be very representative because averaging hides variation in listening habits and ignores context, frequency, and mood changes. A better approach would be to group songs by mood, weight songs by play count, or include additional features like tempo or genre to better capture the listener’s true music preferences.
