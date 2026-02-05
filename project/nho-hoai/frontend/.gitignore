@@ -1,0 +1,64 @@
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+Thumbs.db
+
+.vscode/
+.idea/
+
+# =========================
+# Python / Django
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual env
+.venv/
+backend/.venv/
+
+# Django local stuff
+*.log
+db.sqlite3
+db.sqlite3-journal
+
+# Django media/static (nếu sau này có)
+backend/media/
+backend/staticfiles/
+
+# Env files
+.env
+backend/.env
+frontend/.env
+.env.*
+
+# =========================
+# Node / React / Vite
+# =========================
+node_modules/
+frontend/node_modules/
+
+dist/
+frontend/dist/
+
+# Vite cache
+frontend/.vite/
+
+# npm/yarn/pnpm logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Testing / Coverage
+# =========================
+.coverage
+htmlcov/
+.pytest_cache/
+
+# =========================
+# Build / misc
+# =========================
+*.pid
