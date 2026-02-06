@@ -14,7 +14,7 @@ export default function Login() {
     setErr("");
     try {
       const res = await api.post("/api/auth/login/", { username, password });
-      saveToken(res.data.access);
+      saveToken(res.data.access); // ✅ IMPORTANT
       nav("/");
     } catch (e) {
       setErr("Login failed. Check username/password.");

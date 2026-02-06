@@ -191,3 +191,18 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* Auto-next countdown bar (when correct) */
+.autoNextBar {
+  margin-top: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+.autoNextFill {
+  height: 100%;
+  background: rgba(0, 0, 0, 0.28);
+  border-radius: 999px;
+  transition: width 50ms linear;
+}

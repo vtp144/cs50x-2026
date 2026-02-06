@@ -23,6 +23,11 @@
 .edit-brand {
   font-weight: 800;
   letter-spacing: 0.5px;
+  color: #fff;
+  text-decoration: none;
+}
+.edit-brand:hover {
+  text-decoration: underline;
 }
 
 .edit-actions {
@@ -168,20 +173,84 @@
 .thead {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0;
   background: rgba(0, 0, 0, 0.04);
   padding: 10px 12px;
   font-weight: 900;
 }
+.thead3 {
+  grid-template-columns: 1fr 1fr 90px;
+}
+
 .trow {
   display: grid;
   grid-template-columns: 1fr 1fr;
   padding: 10px 12px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
+  align-items: center;
 }
+.trow3 {
+  grid-template-columns: 1fr 1fr 90px;
+}
+
 .cell {
   overflow-wrap: anywhere;
 }
+.right {
+  display: flex;
+  justify-content: flex-end;
+}
 .strong {
   font-weight: 900;
+}
+
+/* ✅ Inline edit UX */
+.editable.hoverable {
+  cursor: text;
+}
+.editable.hoverable:hover {
+  background: rgba(90, 167, 214, 0.1);
+  border-radius: 10px;
+  padding: 6px 8px;
+  margin: -6px -8px;
+}
+.trow.editing {
+  background: rgba(90, 167, 214, 0.06);
+}
+
+.rowInput {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  padding: 10px 10px;
+  outline: none;
+  font-weight: 800;
+}
+.rowInput:focus {
+  border-color: #5aa7d6;
+  box-shadow: 0 0 0 2px rgba(90, 167, 214, 0.18);
+}
+
+.okBtn {
+  background: #2e7d32;
+  border: none;
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 900;
+  min-width: 70px;
+}
+.okBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.okBtn.ghost {
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  color: rgba(0, 0, 0, 0.7);
+  min-width: 44px;
+}
+.okBtn.ghost:hover {
+  background: rgba(0, 0, 0, 0.04);
 }

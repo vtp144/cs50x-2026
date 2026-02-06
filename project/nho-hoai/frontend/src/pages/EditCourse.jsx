@@ -21,6 +21,11 @@ export default function EditCourse() {
   const [term, setTerm] = useState("");
   const [meaning, setMeaning] = useState("");
 
+  // ✅ inline edit state
+  const [editingId, setEditingId] = useState(null);
+  const [draftTerm, setDraftTerm] = useState("");
+  const [draftMeaning, setDraftMeaning] = useState("");
+
   function logout() {
     clearToken();
     nav("/login");
@@ -40,7 +45,6 @@ export default function EditCourse() {
     retry: 1,
   });
 
-  // auto logout nếu token invalid
   const status =
     deckQ.error?.response?.status || cardsQ.error?.response?.status;
   if ((deckQ.isError || cardsQ.isError) && status === 401) {
@@ -57,15 +61,49 @@ export default function EditCourse() {
       setTerm("");
       setMeaning("");
       qc.invalidateQueries({ queryKey: ["cards", deckId] });
-      qc.invalidateQueries({ queryKey: ["decks"] }); // update cards_count on home
+      qc.invalidateQueries({ queryKey: ["decks"] });
       qc.invalidateQueries({ queryKey: ["deck", deckId] });
     },
   });
 
+  const updateCard = useMutation({
+    mutationFn: ({ cardId, term, meaning }) =>
+      api.patch(`/api/cards/${cardId}/`, { term, meaning }).then((r) => r.data),
+    onSuccess: () => {
+      setEditingId(null);
+      setDraftTerm("");
+      setDraftMeaning("");
+      qc.invalidateQueries({ queryKey: ["cards", deckId] });
+    },
+  });
+
+  function startEdit(card) {
+    setEditingId(card.id);
+    setDraftTerm(card.term || "");
+    setDraftMeaning(card.meaning || "");
+  }
+
+  const canSave = useMemo(() => {
+    if (!editingId) return false;
+    return draftTerm.trim().length > 0 && draftMeaning.trim().length > 0;
+  }, [editingId, draftTerm, draftMeaning]);
+
+  function saveEdit() {
+    if (!editingId) return;
+    if (!canSave) return;
+    updateCard.mutate({
+      cardId: editingId,
+      term: draftTerm.trim(),
+      meaning: draftMeaning.trim(),
+    });
+  }
+
   return (
     <div className="edit-shell">
       <header className="edit-topbar">
-        <div className="edit-brand">NHO-HOAI</div>
+        <Link className="edit-brand" to="/">
+          NHO-HOAI
+        </Link>
 
         <div className="edit-actions">
           <Link className="edit-btn" to="/">
@@ -164,20 +202,98 @@ export default function EditCourse() {
               </p>
             )}
 
+          {updateCard.isError && (
+            <div className="err">Update failed. Check API / permission.</div>
+          )}
+
           {!cardsQ.isLoading &&
             !cardsQ.isError &&
             (cardsQ.data || []).length > 0 && (
               <div className="table">
-                <div className="thead">
+                <div className="thead thead3">
                   <div>Word</div>
                   <div>Definition</div>
+                  <div className="right">OK</div>
                 </div>
-                {(cardsQ.data || []).map((c) => (
-                  <div key={c.id} className="trow">
-                    <div className="cell strong">{c.term}</div>
-                    <div className="cell">{c.meaning}</div>
-                  </div>
-                ))}
+
+                {(cardsQ.data || []).map((c) => {
+                  const isEditing = editingId === c.id;
+
+                  return (
+                    <div
+                      key={c.id}
+                      className={`trow trow3 ${isEditing ? "editing" : ""}`}
+                    >
+                      {/* Word cell */}
+                      <div
+                        className={`cell editable ${isEditing ? "" : "hoverable"}`}
+                        onClick={() => !isEditing && startEdit(c)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !isEditing) startEdit(c);
+                        }}
+                        title={!isEditing ? "Click to edit" : ""}
+                      >
+                        {isEditing ? (
+                          <input
+                            className="rowInput"
+                            value={draftTerm}
+                            onChange={(e) => setDraftTerm(e.target.value)}
+                            autoFocus
+                          />
+                        ) : (
+                          <span className="strong">{c.term}</span>
+                        )}
+                      </div>
+
+                      {/* Definition cell */}
+                      <div
+                        className={`cell editable ${isEditing ? "" : "hoverable"}`}
+                        onClick={() => !isEditing && startEdit(c)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !isEditing) startEdit(c);
+                        }}
+                        title={!isEditing ? "Click to edit" : ""}
+                      >
+                        {isEditing ? (
+                          <input
+                            className="rowInput"
+                            value={draftMeaning}
+                            onChange={(e) => setDraftMeaning(e.target.value)}
+                          />
+                        ) : (
+                          <span>{c.meaning}</span>
+                        )}
+                      </div>
+
+                      {/* OK button */}
+                      <div className="cell right">
+                        {isEditing ? (
+                          <button
+                            className="okBtn"
+                            type="button"
+                            onClick={saveEdit}
+                            disabled={!canSave || updateCard.isPending}
+                          >
+                            {updateCard.isPending ? "..." : "OK"}
+                          </button>
+                        ) : (
+                          <button
+                            className="okBtn ghost"
+                            type="button"
+                            onClick={() => startEdit(c)}
+                            title="Edit"
+                          >
+                            ✎
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
         </section>

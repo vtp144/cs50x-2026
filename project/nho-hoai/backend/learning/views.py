@@ -1,13 +1,13 @@
 from django.db.models import Count
-from rest_framework import viewsets, mixins
+from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import PermissionDenied, NotFound
+from rest_framework.response import Response
 
-from .models import Deck, Card
-from .serializers import DeckSerializer, CardSerializer
-from .permissions import IsOwnerOfDeck, IsOwnerOfCardDeck
+from .models import Card, Deck
+from .permissions import IsOwnerOfCardDeck, IsOwnerOfDeck
+from .serializers import CardSerializer, DeckSerializer
+
 
 class DeckViewSet(viewsets.ModelViewSet):
     serializer_class = DeckSerializer
@@ -17,6 +17,7 @@ class DeckViewSet(viewsets.ModelViewSet):
         return (
             Deck.objects.filter(owner=self.request.user)
             .annotate(cards_count=Count("cards"))
+            .order_by("-updated_at")
         )
 
     def perform_create(self, serializer):
@@ -24,23 +25,16 @@ class DeckViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get", "post"], url_path="cards")
     def cards(self, request, pk=None):
-        # GET /api/decks/:id/cards/  (list)
-        # POST /api/decks/:id/cards/ (create)
-        try:
-            deck = Deck.objects.get(pk=pk)
-        except Deck.DoesNotExist:
-            raise NotFound("Deck không tồn tại.")
-
-        if deck.owner_id != request.user.id:
-            raise PermissionDenied("Bạn không có quyền truy cập deck này.")
+        # ✅ IMPORTANT: uses get_object() so permission & ownership are consistent
+        deck = self.get_object()
 
         if request.method.lower() == "get":
             qs = Card.objects.filter(deck=deck).order_by("-updated_at")
             return Response(CardSerializer(qs, many=True).data)
 
-        # POST
         serializer = CardSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
         Card.objects.create(
             deck=deck,
             term=serializer.validated_data["term"],
@@ -55,10 +49,11 @@ class CardViewSet(
     mixins.UpdateModelMixin,
     mixins.DestroyModelMixin,
     mixins.RetrieveModelMixin,
-    viewsets.GenericViewSet
+    viewsets.GenericViewSet,
 ):
     serializer_class = CardSerializer
     permission_classes = [IsAuthenticated, IsOwnerOfCardDeck]
+    http_method_names = ["get", "patch", "put", "delete", "head", "options"]
 
     def get_queryset(self):
         return Card.objects.select_related("deck").filter(deck__owner=self.request.user)
