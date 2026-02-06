@@ -15,7 +15,7 @@ export default function Login() {
     try {
       const res = await api.post("/api/auth/login/", { username, password });
       saveToken(res.data.access);
-      nav("/decks");
+      nav("/");
     } catch (e) {
       setErr("Login failed. Check username/password.");
     }

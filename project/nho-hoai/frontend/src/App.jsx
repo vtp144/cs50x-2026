@@ -1,33 +1,55 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import Login from "./pages/Login";
-import Decks from "./pages/Decks";
-import DeckDetail from "./pages/DeckDetail";
-import ProtectedRoute from "./components/ProtectedRoute";
+import ProtectedRoute from "./components/ProtectedRoute.jsx";
+
+import Login from "./pages/Login.jsx";
+import Home from "./pages/Home.jsx";
+import CreateCourse from "./pages/CreateCourse.jsx";
+import Study from "./pages/Study.jsx";
+import EditCourse from "./pages/EditCourse.jsx";
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/decks" replace />} />
       <Route path="/login" element={<Login />} />
 
       <Route
-        path="/decks"
+        path="/"
         element={
           <ProtectedRoute>
-            <Decks />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/decks/:id"
-        element={
-          <ProtectedRoute>
-            <DeckDetail />
+            <Home />
           </ProtectedRoute>
         }
       />
 
-      <Route path="*" element={<Navigate to="/decks" replace />} />
+      <Route
+        path="/courses/create"
+        element={
+          <ProtectedRoute>
+            <CreateCourse />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/decks/:id/study"
+        element={
+          <ProtectedRoute>
+            <Study />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ✅ NEW: edit course */}
+      <Route
+        path="/decks/:id/edit"
+        element={
+          <ProtectedRoute>
+            <EditCourse />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
