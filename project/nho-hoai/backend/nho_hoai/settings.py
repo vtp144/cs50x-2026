@@ -32,6 +32,13 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost:517\d$",
+    r"^http://127\.0\.0\.1:517\d$",
+    # GitHub Codespaces (Vite dev server)
+    r"^https://.*-517\d\.app\.github\.dev$",
+]
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
