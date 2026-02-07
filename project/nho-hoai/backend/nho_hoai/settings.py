@@ -39,6 +39,10 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*-517\d\.app\.github\.dev$",
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.app.github.dev",
+]
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
