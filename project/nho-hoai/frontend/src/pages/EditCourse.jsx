@@ -119,7 +119,7 @@ export default function EditCourse() {
     <div className="edit-shell">
       <header className="edit-topbar">
         <Link className="edit-brand" to="/">
-          NHO-HOAI
+          NHỚ HOÀI
         </Link>
 
         <div className="edit-actions">

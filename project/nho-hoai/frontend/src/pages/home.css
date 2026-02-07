@@ -12,18 +12,30 @@
 }
 
 .home-topbar {
-  height: 60px;
-  background: #2f3d4a;
-  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+
+  width: 100%;
+  left: 0;
+  right: 0;
+
+  height: 64px;
+  background: #6ecdb0; /* memrise-ish green */
+  color: #123;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 22px;
+
+  padding: 0 18px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
 }
 .home-brand {
   font-weight: 800;
   letter-spacing: 0.5px;
-  color: #fff;
+  color: #123;
   text-decoration: none;
 }
 .home-brand:hover {
@@ -48,9 +60,9 @@
 .home-btn:hover {
   border-color: rgba(255, 255, 255, 0.5);
 }
-.home-btnPrimary {
+/* .home-btnPrimary {
   background: rgba(242, 178, 60, 0.15);
-}
+} */
 
 .home-main {
   max-width: 1100px;

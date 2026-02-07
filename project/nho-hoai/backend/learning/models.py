@@ -72,6 +72,32 @@ class StudySession(models.Model):
         return f"Session {self.id} - {self.user_id} - deck {self.deck_id}"
 
 
+class StudyAnswer(models.Model):
+    """
+    1 record = 1 lần user trả lời 1 card trong 1 session
+    -> dùng để làm Session Summary chính xác như Memrise.
+    """
+
+    session = models.ForeignKey(
+        StudySession, on_delete=models.CASCADE, related_name="answers"
+    )
+    card = models.ForeignKey(
+        Card, on_delete=models.CASCADE, related_name="study_answers"
+    )
+    is_correct = models.BooleanField()
+    answered_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["session", "card"]),
+            models.Index(fields=["session", "answered_at"]),
+        ]
+        ordering = ["answered_at"]
+
+    def __str__(self):
+        return f"Ans s{self.session_id} c{self.card_id} ok={self.is_correct}"
+
+
 class CardProgress(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

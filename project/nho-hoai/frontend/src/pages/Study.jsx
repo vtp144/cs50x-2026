@@ -4,15 +4,13 @@ import { api } from "../lib/api";
 import { clearToken } from "../lib/auth";
 import "./study.css";
 
-const AUTO_NEXT_MS = 1200; // ✅ chỉnh nhanh/chậm ở đây (ms). ví dụ 800, 1200, 1500
-const TICK_MS = 50;
+// Session policy
+const CORE_SIZE = 6;
+const MAX_TOTAL = 12;
+const AUTO_NEXT_MS = 1100;
 
-// session tuning
-const QUESTION_LIMIT = 10; // ✅ luôn 10 câu / session
-const NEW_LIMIT = 6; // ✅ 6 từ mới
-const OLD_TARGET = 4; // ✅ tối thiểu 4 từ cũ
-const MAX_APPEAR_PER_CARD = 12; // ✅ max 12 lần xuất hiện / card / session
-const MIN_GAP = 2; // ✅ tránh gặp lại ngay
+const NUM_CHOICES = 4;
+const MIN_GAP = 2;
 
 function shuffle(arr) {
   const a = [...arr];
@@ -23,7 +21,7 @@ function shuffle(arr) {
   return a;
 }
 
-function uniqueNonEmpty(arr) {
+function uniqNonEmpty(arr) {
   const out = [];
   const seen = new Set();
   for (const x of arr) {
@@ -41,32 +39,22 @@ function buildMCQ({ card, allCards, mode }) {
   const prompt = isT2M ? card.term : card.meaning;
   const correct = isT2M ? card.meaning : card.term;
 
-  const pool = uniqueNonEmpty(
+  const pool = uniqNonEmpty(
     allCards.map((c) => (isT2M ? c.meaning : c.term)),
   ).filter((x) => x !== correct);
 
-  const wrongs = shuffle(pool).slice(0, 3);
-  while (wrongs.length < 3) wrongs.push("—");
+  const wrongs = shuffle(pool).slice(0, NUM_CHOICES - 1);
+  while (wrongs.length < NUM_CHOICES - 1) wrongs.push("—");
 
   return {
     cardId: card.id,
     prompt,
     correct,
     choices: shuffle([correct, ...wrongs]),
+    meaning: card.meaning || "",
     note: card.note || "",
     mode,
   };
-}
-
-function uniqKeepOrder(arr) {
-  const seen = new Set();
-  const out = [];
-  for (const x of arr) {
-    if (seen.has(x)) continue;
-    seen.add(x);
-    out.push(x);
-  }
-  return out;
 }
 
 export default function Study() {
@@ -79,331 +67,163 @@ export default function Study() {
     nav("/login");
   }
 
-  // boot state
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState("");
   const [deckTitle, setDeckTitle] = useState("");
-  const [totalCards, setTotalCards] = useState(0);
 
-  // session info
-  const sessionIdRef = useRef(null);
-
-  // cards pool
-  const cardsRef = useRef([]);
-  const cardByIdRef = useRef(new Map());
-
-  // queues
-  const dueRef = useRef([]);
-  const learningRef = useRef([]);
-  const newRef = useRef([]);
-  const retryRef = useRef([]);
-
-  // ✅ fallback pool for ensuring 10 questions
-  // sessionPool = các card ids “được đưa vào session” (new + old target + carryover + due/learning)
-  const sessionPoolRef = useRef([]);
-  const oldPoolRef = useRef([]); // remaining old candidates (not new)
-
-  // session tracking
-  const answeredCountRef = useRef(0);
-  const counterRef = useRef(0);
-
-  const wrongInSessionRef = useRef(new Map());
-  const correctInSessionRef = useRef(new Map());
-  const seenCountRef = useRef(new Map());
-  const lastSeenAtRef = useRef(new Map());
-
-  // summary
-  const [isComplete, setIsComplete] = useState(false);
-  const [summaryRows, setSummaryRows] = useState([]);
-
-  // current question UI
   const [question, setQuestion] = useState(null);
   const [selected, setSelected] = useState(null);
   const [isCorrect, setIsCorrect] = useState(null);
-  const [showHard, setShowHard] = useState(false);
 
-  // auto-next countdown
+  const [isComplete, setIsComplete] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryRows, setSummaryRows] = useState([]);
+  const [carryOverIds, setCarryOverIds] = useState([]);
+
   const [autoLeftMs, setAutoLeftMs] = useState(0);
-  const timeoutRef = useRef(null);
-  const intervalRef = useRef(null);
-  const startedAtRef = useRef(0);
+
+  const [answeredCount, setAnsweredCount] = useState(0);
+
+  const sessionIdRef = useRef(null);
+  const cardsRef = useRef([]);
+  const cardByIdRef = useRef(new Map());
+
+  const queueRef = useRef([]);
+  const recentRef = useRef([]);
+
+  const answeredCountRef = useRef(0);
+
+  const correctCountRef = useRef(new Map());
+  const wrongCountRef = useRef(new Map());
+
+  const nextTimerRef = useRef(null);
+  const tickTimerRef = useRef(null);
 
   function clearTimers() {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    startedAtRef.current = 0;
+    if (nextTimerRef.current) clearTimeout(nextTimerRef.current);
+    if (tickTimerRef.current) clearInterval(tickTimerRef.current);
+    nextTimerRef.current = null;
+    tickTimerRef.current = null;
     setAutoLeftMs(0);
   }
 
-  function startAutoNext(nextFn) {
-    clearTimers();
-    startedAtRef.current = Date.now();
-    setAutoLeftMs(AUTO_NEXT_MS);
-
-    intervalRef.current = setInterval(() => {
-      const elapsed = Date.now() - startedAtRef.current;
-      const left = Math.max(0, AUTO_NEXT_MS - elapsed);
-      setAutoLeftMs(left);
-      if (left <= 0 && intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    }, TICK_MS);
-
-    timeoutRef.current = setTimeout(() => nextFn(), AUTO_NEXT_MS);
+  function pushRecent(cid) {
+    const r = recentRef.current;
+    r.push(cid);
+    while (r.length > MIN_GAP) r.shift();
+  }
+  function isRecent(cid) {
+    return recentRef.current.includes(cid);
   }
 
-  function canShowCardNow(cardId) {
-    const last = lastSeenAtRef.current.get(cardId);
-    if (!last) return true;
-    return counterRef.current - last >= MIN_GAP;
+  function incMap(m, k) {
+    m.set(k, (m.get(k) || 0) + 1);
   }
 
-  function bumpSeen(cardId) {
-    const prev = seenCountRef.current.get(cardId) || 0;
-    const next = prev + 1;
-    seenCountRef.current.set(cardId, next);
-    lastSeenAtRef.current.set(cardId, counterRef.current);
-    return next;
-  }
+  function endSessionFallbackSummary() {
+    const keySet = new Set([
+      ...correctCountRef.current.keys(),
+      ...wrongCountRef.current.keys(),
+    ]);
 
-  function pickFromQueue(q) {
-    const tries = 60;
-    for (let t = 0; t < tries; t++) {
-      if (q.length === 0) return null;
-      const id = q.shift();
-
-      const seen = seenCountRef.current.get(id) || 0;
-      if (seen >= MAX_APPEAR_PER_CARD) continue;
-
-      if (!canShowCardNow(id)) {
-        q.push(id);
-        continue;
-      }
-      return id;
-    }
-    return null;
-  }
-
-  // ✅ Fallback pick to guarantee 10 questions
-  function pickFromSessionPool() {
-    const pool = sessionPoolRef.current;
-    if (!pool.length) return null;
-
-    // try a few random candidates
-    for (let i = 0; i < 40; i++) {
-      const id = pool[Math.floor(Math.random() * pool.length)];
-      const seen = seenCountRef.current.get(id) || 0;
-      if (seen >= MAX_APPEAR_PER_CARD) continue;
-      if (!canShowCardNow(id)) continue;
-      return id;
-    }
-    return null;
-  }
-
-  function pickNextCardId() {
-    counterRef.current += 1;
-
-    // every 3rd question: prefer retry
-    if (retryRef.current.length > 0 && counterRef.current % 3 === 0) {
-      const id = pickFromQueue(retryRef.current);
-      if (id) return id;
-    }
-
-    let id = pickFromQueue(dueRef.current);
-    if (id) return id;
-
-    id = pickFromQueue(learningRef.current);
-    if (id) return id;
-
-    id = pickFromQueue(newRef.current);
-    if (id) return id;
-
-    id = pickFromQueue(retryRef.current);
-    if (id) return id;
-
-    // ✅ important: if queues are empty but session hasn't reached 10 questions,
-    // pick again from sessionPool (review repeats)
-    return pickFromSessionPool();
-  }
-
-  function buildNextQuestion() {
-    if (answeredCountRef.current >= QUESTION_LIMIT) return null;
-
-    const nextId = pickNextCardId();
-    if (!nextId) return null;
-
-    const card = cardByIdRef.current.get(nextId);
-    if (!card) return null;
-
-    bumpSeen(nextId);
-
-    const mode = Math.random() < 0.5 ? "TERM_TO_MEANING" : "MEANING_TO_TERM";
-    return buildMCQ({ card, allCards: cardsRef.current, mode });
-  }
-
-  function makeSummary() {
-    const rows = [];
-    const ids = Array.from(seenCountRef.current.keys());
-
-    for (const cardId of ids) {
-      const card = cardByIdRef.current.get(cardId);
-      if (!card) continue;
-
-      const correct = correctInSessionRef.current.get(cardId) || 0;
-      const wrong = wrongInSessionRef.current.get(cardId) || 0;
-      const hard = wrong >= 2;
-
-      rows.push({
-        cardId,
-        term: card.term,
-        meaning: card.meaning,
-        correct,
-        wrong,
-        hard,
-      });
-    }
-
-    rows.sort((a, b) => {
-      if (a.hard !== b.hard) return a.hard ? -1 : 1;
-      if (a.wrong !== b.wrong) return b.wrong - a.wrong;
-      return a.term.localeCompare(b.term);
-    });
+    const rows = Array.from(keySet)
+      .map((cid) => {
+        const c = cardByIdRef.current.get(cid);
+        if (!c) return null;
+        const correct = correctCountRef.current.get(cid) || 0;
+        const wrong = wrongCountRef.current.get(cid) || 0;
+        return {
+          cardId: cid,
+          term: c.term,
+          meaning: c.meaning,
+          note: c.note || "",
+          correct,
+          wrong,
+          hard: wrong > 0,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.wrong - a.wrong);
 
     setSummaryRows(rows);
+    setCarryOverIds(
+      rows
+        .filter((r) => r.wrong > 0)
+        .slice(0, 4)
+        .map((r) => r.cardId),
+    );
   }
 
-  function endSessionUI() {
+  function setComplete() {
     clearTimers();
     setQuestion(null);
     setSelected(null);
     setIsCorrect(null);
-    setShowHard(false);
     setIsComplete(true);
-    makeSummary();
+    endSessionFallbackSummary();
+  }
+
+  function startAutoNext() {
+    clearTimers();
+    setAutoLeftMs(AUTO_NEXT_MS);
+
+    const startAt = Date.now();
+    tickTimerRef.current = setInterval(() => {
+      const left = Math.max(0, AUTO_NEXT_MS - (Date.now() - startAt));
+      setAutoLeftMs(left);
+    }, 50);
+
+    nextTimerRef.current = setTimeout(() => {
+      clearTimers();
+      nextQuestion();
+    }, AUTO_NEXT_MS);
+  }
+
+  function pickNextCardIdFromQueue() {
+    const q = queueRef.current;
+
+    for (let i = 0; i < q.length; i++) {
+      const cid = q[i];
+      if (!isRecent(cid)) {
+        q.splice(i, 1);
+        return cid;
+      }
+    }
+    return q.shift() ?? null;
+  }
+
+  function buildNextQuestion() {
+    const cid = pickNextCardIdFromQueue();
+    if (cid == null) return null;
+
+    const card = cardByIdRef.current.get(cid);
+    if (!card) return null;
+
+    pushRecent(cid);
+
+    const mode = Math.random() < 0.5 ? "TERM_TO_MEANING" : "MEANING_TO_TERM";
+    return buildMCQ({ card, allCards: cardsRef.current, mode });
   }
 
   function nextQuestion() {
     clearTimers();
     setSelected(null);
     setIsCorrect(null);
-    setShowHard(false);
+
+    if (answeredCountRef.current >= MAX_TOTAL) {
+      setComplete();
+      return;
+    }
 
     const q = buildNextQuestion();
     if (!q) {
-      endSessionUI();
+      setComplete();
       return;
     }
     setQuestion(q);
   }
 
-  async function boot(carryOverCardIds = []) {
-    setLoading(true);
-    setBootError("");
-    setIsComplete(false);
-    setSummaryRows([]);
-
-    try {
-      const res = await api.post(`/api/decks/${deckId}/study/start/`, {
-        carry_over_card_ids: carryOverCardIds,
-        new_limit: NEW_LIMIT,
-        question_limit: QUESTION_LIMIT,
-      });
-
-      const data = res.data;
-
-      sessionIdRef.current = data.session?.id ?? null;
-      setDeckTitle(data.deck?.title || "");
-
-      const cards = data.cards || [];
-      setTotalCards(cards.length);
-
-      cardsRef.current = cards;
-      cardByIdRef.current = new Map(cards.map((c) => [c.id, c]));
-
-      const queues = data.queues || {};
-      const due = [...(queues.due || [])];
-      const learning = [...(queues.learning || [])];
-      const newIds = [...(queues.new || [])];
-
-      // ✅ Build oldPool (old candidates not in new)
-      const allIds = cards.map((c) => c.id);
-      const newSet = new Set(newIds);
-      const oldCandidates = allIds.filter((cid) => !newSet.has(cid));
-      oldPoolRef.current = shuffle(oldCandidates);
-
-      // ✅ Ensure at least OLD_TARGET old cards in session seed
-      // priority: carryOver (already inside learning), then due/learning, then top from oldPool
-      const currentOld = uniqKeepOrder([...learning, ...due]).filter(
-        (cid) => !newSet.has(cid),
-      );
-      const need = Math.max(0, OLD_TARGET - currentOld.length);
-
-      if (need > 0) {
-        const extra = [];
-        while (extra.length < need && oldPoolRef.current.length > 0) {
-          const pick = oldPoolRef.current.shift();
-          if (!pick) break;
-          if (newSet.has(pick)) continue;
-          if (currentOld.includes(pick)) continue;
-          extra.push(pick);
-        }
-        // add extras to learning queue so they appear this session
-        learning.push(...extra);
-      }
-
-      // set queues
-      dueRef.current = due;
-      learningRef.current = learning;
-      newRef.current = newIds;
-      retryRef.current = [];
-
-      // ✅ build sessionPool = union(new + due + learning)
-      sessionPoolRef.current = uniqKeepOrder([...newIds, ...due, ...learning]);
-
-      // reset counters
-      answeredCountRef.current = 0;
-      counterRef.current = 0;
-      wrongInSessionRef.current = new Map();
-      correctInSessionRef.current = new Map();
-      seenCountRef.current = new Map();
-      lastSeenAtRef.current = new Map();
-
-      const first = buildNextQuestion();
-      if (!first) {
-        endSessionUI();
-        return;
-      }
-
-      setQuestion(first);
-      setSelected(null);
-      setIsCorrect(null);
-      setShowHard(false);
-    } catch (e) {
-      const status = e?.response?.status;
-      if (status === 401) {
-        logout();
-        return;
-      }
-      setBootError("Failed to start study session.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    boot();
-    return () => clearTimers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deckId]);
-
-  async function submitAnswer(cardId, ok) {
+  async function submitAnswerToBackend(cardId, ok) {
     const sid = sessionIdRef.current;
     if (!sid) return;
 
@@ -419,135 +239,210 @@ export default function Study() {
     }
   }
 
-  function reinsertOnWrong(cardId) {
-    const m = wrongInSessionRef.current;
-    const prev = m.get(cardId) || 0;
-    const nextWrong = prev + 1;
-    m.set(cardId, nextWrong);
+  async function fetchSummaryFromBackend() {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
 
-    if (nextWrong >= 2) setShowHard(true);
-
-    // cap spam
-    const seen = seenCountRef.current.get(cardId) || 0;
-    if (seen >= MAX_APPEAR_PER_CARD) return;
-
-    const weight = Math.min(1 + nextWrong, 3);
-    retryRef.current.unshift(cardId);
-    for (let i = 1; i < weight; i++) retryRef.current.push(cardId);
+    setSummaryLoading(true);
+    try {
+      const res = await api.get(`/api/study/summary/?session_id=${sid}`);
+      const rows = (res.data?.rows || []).map((r) => ({
+        cardId: r.cardId,
+        term: r.term,
+        meaning: r.meaning,
+        note: r.note || "",
+        correct: r.correct ?? 0,
+        wrong: r.wrong ?? 0,
+        hard: !!r.hard,
+      }));
+      setSummaryRows(rows);
+      setCarryOverIds(res.data?.recommended_carry_over_card_ids || []);
+    } catch (e) {
+      const status = e?.response?.status;
+      if (status === 401) logout();
+    } finally {
+      setSummaryLoading(false);
+    }
   }
 
-  function recordCorrect(cardId) {
-    const m = correctInSessionRef.current;
-    m.set(cardId, (m.get(cardId) || 0) + 1);
+  async function boot(carryOverCardIds = []) {
+    setLoading(true);
+    setBootError("");
+    setIsComplete(false);
+    setSummaryRows([]);
+    setCarryOverIds([]);
+    setSummaryLoading(false);
+
+    sessionIdRef.current = null;
+    cardsRef.current = [];
+    cardByIdRef.current = new Map();
+    queueRef.current = [];
+    recentRef.current = [];
+
+    answeredCountRef.current = 0;
+    setAnsweredCount(0);
+
+    correctCountRef.current = new Map();
+    wrongCountRef.current = new Map();
+
+    clearTimers();
+    setQuestion(null);
+    setSelected(null);
+    setIsCorrect(null);
+
+    try {
+      const res = await api.post(`/api/decks/${deckId}/study/start/`, {
+        core_size: CORE_SIZE,
+        max_total_questions: MAX_TOTAL,
+        carry_over_card_ids: carryOverCardIds,
+      });
+
+      const data = res.data;
+
+      sessionIdRef.current = data.session?.id ?? null;
+      setDeckTitle(data.deck?.title || "");
+
+      const cards = data.cards || [];
+      cardsRef.current = cards;
+      cardByIdRef.current = new Map(cards.map((c) => [c.id, c]));
+
+      const coreIds = data.core_ids || [];
+      queueRef.current = shuffle(coreIds);
+
+      setLoading(false);
+      nextQuestion();
+    } catch (e) {
+      const status = e?.response?.status;
+      if (status === 401) {
+        logout();
+        return;
+      }
+      setBootError("Please add vocabulary first!");
+      setLoading(false);
+    }
   }
 
-  async function pick(choice) {
+  useEffect(() => {
+    boot();
+    return () => clearTimers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deckId]);
+
+  useEffect(() => {
+    if (!isComplete) return;
+    fetchSummaryFromBackend();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isComplete]);
+
+  async function answer(choiceOrNull) {
     if (!question) return;
     if (selected !== null) return;
 
-    setSelected(choice);
+    const chosen = choiceOrNull ?? "__IDK__";
+    setSelected(chosen);
 
-    const ok = choice === question.correct;
+    const ok = choiceOrNull !== null && choiceOrNull === question.correct;
     setIsCorrect(ok);
 
-    await submitAnswer(question.cardId, ok);
-
-    // ✅ count towards the 10-question session regardless correct/wrong
     answeredCountRef.current += 1;
+    setAnsweredCount(answeredCountRef.current);
 
-    if (ok) {
-      recordCorrect(question.cardId);
-      startAutoNext(nextQuestion);
-    } else {
-      reinsertOnWrong(question.cardId);
+    if (ok) incMap(correctCountRef.current, question.cardId);
+    else incMap(wrongCountRef.current, question.cardId);
+
+    await submitAnswerToBackend(question.cardId, ok);
+
+    if (!ok && answeredCountRef.current < MAX_TOTAL) {
+      queueRef.current.push(question.cardId);
     }
+
+    if (answeredCountRef.current >= MAX_TOTAL) {
+      setComplete();
+      return;
+    }
+
+    if (ok) startAutoNext();
   }
+
+  const progressRatio = useMemo(() => {
+    return (Math.min(answeredCount, MAX_TOTAL) / MAX_TOTAL) * 100;
+  }, [answeredCount]);
 
   const autoPct =
     autoLeftMs > 0
       ? Math.max(0, Math.min(100, (autoLeftMs / AUTO_NEXT_MS) * 100))
       : 0;
 
-  const progressText = useMemo(() => {
-    // show current step (1..10)
-    const step = Math.min(
-      answeredCountRef.current + (question ? 1 : 0),
-      QUESTION_LIMIT,
-    );
-    return `${step} / ${QUESTION_LIMIT}`;
-  }, [question, loading, isComplete]);
-
-  function getCarryOverHardIds() {
-    // top 4 wrongest from summary
-    const rows = [...summaryRows];
-    rows.sort((a, b) => b.wrong - a.wrong);
-    return rows
-      .filter((r) => r.wrong > 0)
-      .slice(0, 4)
-      .map((r) => r.cardId);
-  }
+  const titleLine = deckTitle ? `${deckTitle} • New level` : "New level";
 
   return (
-    <div className="study-shell">
-      <header className="study-topbar">
-        <Link className="study-brand" to="/">
-          NHỚ HOÀI
-        </Link>
+    <div className="m-study">
+      <header className="m-topbar">
+        <div className="m-topbarLeft">
+          <Link className="m-brand" to="/">
+            NHỚ HOÀI
+          </Link>
+          <div className="m-levelTitle">{titleLine}</div>
+        </div>
 
-        <div className="study-actions">
-          <Link className="study-btn" to="/">
+        <div className="m-topbarRight">
+          <Link className="m-pill" to="/">
             Home
           </Link>
-          <button className="study-btn" onClick={logout}>
+          <button className="m-pill" onClick={logout}>
             Logout
           </button>
         </div>
       </header>
 
-      <main className="study-main">
-        <div className="study-head">
-          <h1 className="study-title">Study</h1>
-          <div className="study-sub">
-            {deckTitle ? `${deckTitle} • ` : ""}
-            Deck #{deckId} • {totalCards} cards
+      <main className="m-main">
+        <div className="m-progressRow">
+          <div className="m-progressBar">
+            <div
+              className="m-progressFill"
+              style={{ width: `${progressRatio}%` }}
+            />
           </div>
+          <div className="m-progressCount">{answeredCount}</div>
         </div>
 
-        {loading && <p>Starting session...</p>}
-        {!!bootError && <p style={{ color: "crimson" }}>{bootError}</p>}
+        {loading && <div className="m-card">Starting session…</div>}
+        {!!bootError && <div className="m-card m-error">{bootError}</div>}
 
         {!loading && !bootError && isComplete && (
-          <div className="study-card">
-            <div className="study-progress">Session complete ✅</div>
+          <div className="m-card">
+            <div className="m-completeTitle">
+              Session complete ✅{" "}
+              {summaryLoading ? (
+                <span className="m-muted">• loading…</span>
+              ) : null}
+            </div>
 
-            <h2 style={{ marginTop: 12, marginBottom: 10 }}>Summary</h2>
-
-            <div className="summaryTable">
-              <div className="summaryHead">
+            <div className="m-summary">
+              <div className="m-summaryHead">
                 <div>Word</div>
                 <div>Meaning</div>
-                <div className="right">Correct</div>
-                <div className="right">Wrong</div>
+                <div>Note</div>
+                <div className="m-right">Correct</div>
+                <div className="m-right">Wrong</div>
               </div>
 
               {summaryRows.map((r) => (
                 <div
                   key={r.cardId}
-                  className={`summaryRow ${r.hard ? "hardRow" : ""}`}
+                  className={`m-summaryRow ${r.hard ? "m-hard" : ""}`}
                 >
-                  <div className="strong">{r.term}</div>
+                  <div className="m-strong">{r.term}</div>
                   <div>{r.meaning}</div>
-                  <div className="right">{r.correct}</div>
-                  <div className="right">{r.wrong}</div>
+                  <div className="m-muted">{r.note || "—"}</div>
+                  <div className="m-right">{r.correct}</div>
+                  <div className="m-right">{r.wrong}</div>
                 </div>
               ))}
             </div>
 
-            <div className="study-footer" style={{ marginTop: 14 }}>
-              <button
-                className="study-next"
-                onClick={() => boot(getCarryOverHardIds())}
-              >
+            <div className="m-footer">
+              <button className="m-primary" onClick={() => boot(carryOverIds)}>
                 Study next session →
               </button>
             </div>
@@ -555,76 +450,98 @@ export default function Study() {
         )}
 
         {!loading && !bootError && !isComplete && question && (
-          <div className="study-card">
-            <div className="study-progress">
-              {progressText}
-              <span style={{ marginLeft: 10, opacity: 0.7 }}>
-                •{" "}
-                {question.mode === "TERM_TO_MEANING"
-                  ? "term→meaning"
-                  : "meaning→term"}
-              </span>
-              {showHard && <span className="hardPill">Hard</span>}
+          <div className="m-stage">
+            {/* ✅ Memrise-like header row: left instruction, right IDK */}
+            <div className="m-headRow">
+              <div className="m-instruction">Pick the correct answer</div>
+
+              <button
+                className="m-idkCard"
+                onClick={() => answer(null)}
+                disabled={selected !== null}
+                title="Mark as wrong and show answer"
+              >
+                <div className="m-idkBig">?</div>
+                <div className="m-idkSmall">I don’t know</div>
+              </button>
             </div>
 
-            <div className="study-prompt">{question.prompt}</div>
+            {/* ✅ Reduce spacing */}
+            <div className="m-promptWrap tight">
+              <div className="m-prompt">{question.prompt}</div>
+            </div>
 
-            <div className="study-choices">
-              {question.choices.map((c) => {
-                const picked = selected === c;
-                const correctChoice =
-                  selected !== null && c === question.correct;
-                const wrongPicked =
-                  picked && selected !== null && c !== question.correct;
-
-                let cls = "choice";
-                if (picked) cls += " choice-picked";
-                if (correctChoice) cls += " choice-correct";
-                if (wrongPicked) cls += " choice-wrong";
+            <div className="m-choicesFull">
+              {question.choices.map((c, idx) => {
+                const isChosen = selected === c;
+                const showRight = selected !== null && c === question.correct;
+                const showWrong =
+                  selected !== null && isChosen && c !== question.correct;
 
                 return (
                   <button
-                    key={`${question.cardId}-${c}`}
-                    className={cls}
-                    onClick={() => pick(c)}
+                    key={`${c}-${idx}`}
+                    className={[
+                      "m-choice",
+                      isChosen ? "isChosen" : "",
+                      showRight ? "isRight" : "",
+                      showWrong ? "isWrong" : "",
+                    ].join(" ")}
+                    onClick={() => answer(c)}
                     disabled={selected !== null}
                   >
-                    {c}
+                    <span className="m-choiceNum">{idx + 1}</span>
+                    <span className="m-choiceText">{c}</span>
                   </button>
                 );
               })}
             </div>
 
-            {selected !== null && (
-              <div
-                className={isCorrect ? "study-result ok" : "study-result bad"}
-              >
-                {isCorrect
-                  ? "Correct ✅"
-                  : `Wrong ❌  Answer: ${question.correct}`}
+            {/* ✅ Note/Meaning replaces old IDK position: shown below */}
+            {selected !== null && isCorrect === true && (
+              <div className="m-revealRow ok">
+                <div className="m-revealTitle">✅ Correct</div>
 
-                <div className="study-noteRow">
-                  <span className="study-noteLabel">Note:</span>
-                  <span className="study-noteText">
-                    {question.note?.trim() ? question.note : "—"}
-                  </span>
+                <div className="m-revealLine">
+                  <span className="m-revealLabel">Meaning:</span>{" "}
+                  <b>{question.meaning || question.correct}</b>
                 </div>
 
-                {isCorrect === true && (
-                  <div className="autoNextBar" aria-label="Auto next progress">
-                    <div
-                      className="autoNextFill"
-                      style={{ width: `${autoPct}%` }}
-                    />
-                  </div>
-                )}
+                <div className="m-revealLine">
+                  <span className="m-revealLabel">Note:</span>{" "}
+                  <span className="m-muted">{question.note || "—"}</span>
+                </div>
+
+                <div className="m-autoBar">
+                  <div
+                    className="m-autoFill"
+                    style={{ width: `${autoPct}%` }}
+                  />
+                </div>
               </div>
             )}
 
             {selected !== null && isCorrect === false && (
-              <div className="study-footer">
-                <button className="study-next" onClick={nextQuestion}>
-                  Next
+              <div className="m-revealRow bad">
+                <div className="m-revealTitle">
+                  ❌ Wrong — Answer: <b>{question.correct}</b>
+                </div>
+
+                <div className="m-revealLine">
+                  <span className="m-revealLabel">Meaning:</span>{" "}
+                  <b>{question.meaning || question.correct}</b>
+                </div>
+
+                <div className="m-revealLine">
+                  <span className="m-revealLabel">Note:</span>{" "}
+                  <span className="m-muted">{question.note || "—"}</span>
+                </div>
+
+                <button
+                  className="m-primary m-next"
+                  onClick={() => nextQuestion()}
+                >
+                  Next →
                 </button>
               </div>
             )}

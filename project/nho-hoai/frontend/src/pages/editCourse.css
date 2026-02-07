@@ -12,18 +12,30 @@
 }
 
 .edit-topbar {
-  height: 60px;
-  background: #2f3d4a;
-  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+
+  width: 100%;
+  left: 0;
+  right: 0;
+
+  height: 64px;
+  background: #79e3c3; /* memrise-ish green */
+  color: #123;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 22px;
+
+  padding: 0 18px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
 }
 .edit-brand {
   font-weight: 800;
   letter-spacing: 0.5px;
-  color: #fff;
+  color: #123;
   text-decoration: none;
 }
 .edit-brand:hover {
@@ -115,10 +127,12 @@
 /* ✅ 3 columns like screenshot (Word / Definition / Note) */
 .grid3 {
   grid-template-columns: 1fr 1fr 1fr;
+  gap: 22px; /* ✅ tăng gap để input không dính nhau */
 }
 @media (max-width: 900px) {
   .grid3 {
     grid-template-columns: 1fr;
+    gap: 14px;
   }
 }
 
@@ -130,11 +144,14 @@
 
 .input {
   width: 100%;
+  box-sizing: border-box; /* ✅ chống tràn */
   border: 1px solid #d9d2c7;
-  border-radius: 12px;
-  padding: 12px 12px;
-  font-size: 14px;
+  border-radius: 14px;
+  padding: 14px 14px;
+  font-size: 15px;
   outline: none;
+  background: #fff;
+  min-height: 46px; /* ✅ ổn định chiều cao */
 }
 .input:focus {
   border-color: #5aa7d6;
@@ -198,6 +215,12 @@
 .trow4 {
   grid-template-columns: 1fr 1fr 1fr 140px;
 }
+.trow4 {
+  align-items: start; /* ✅ input cao thì cell vẫn canh top */
+  gap: 14px; /* ✅ tách cột rõ hơn */
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
 
 @media (max-width: 900px) {
   .thead4,
@@ -210,10 +233,16 @@
 .cell {
   overflow-wrap: anywhere;
 }
+.cell {
+  padding: 6px 6px; /* ✅ tạo khoảng thở */
+  min-width: 0; /* ✅ tránh tràn */
+}
 .right {
   display: flex;
   justify-content: flex-end;
+  align-items: center; /* ✅ nút không tụt */
 }
+
 .strong {
   font-weight: 900;
 }
@@ -222,23 +251,37 @@
 .editable.hoverable {
   cursor: text;
 }
-.editable.hoverable:hover {
+/* .editable.hoverable:hover {
   background: rgba(90, 167, 214, 0.1);
   border-radius: 10px;
   padding: 6px 8px;
   margin: -6px -8px;
+} */
+/* ✅ hover không dùng margin âm nữa (tránh layout bị nhảy/đè) */
+.editable.hoverable:hover {
+  background: rgba(90, 167, 214, 0.08);
+  border-radius: 10px;
 }
 .trow.editing {
   background: rgba(90, 167, 214, 0.06);
 }
 
+.trow.editing .cell {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
 .rowInput {
   width: 100%;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 10px;
-  padding: 10px 10px;
+  box-sizing: border-box; /* ✅ cực quan trọng để không tràn chèn */
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 12px;
+  padding: 12px 12px;
   outline: none;
   font-weight: 800;
+  line-height: 1.2;
+  min-height: 44px; /* ✅ giống input memrise */
+  background: #fff;
 }
 .rowInput:focus {
   border-color: #5aa7d6;
@@ -251,53 +294,64 @@
   gap: 10px;
   justify-content: flex-end;
   align-items: center;
+  flex-wrap: nowrap;
 }
 
 .okBtn {
   background: #2e7d32;
   border: none;
   color: #fff;
-  padding: 10px 12px;
+  height: 36px; /* ✅ nhỏ hơn */
+  padding: 0 14px;
   border-radius: 12px;
   cursor: pointer;
   font-weight: 900;
   min-width: 70px;
-}
-.okBtn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.okBtn.ghost {
-  background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.14);
-  color: rgba(0, 0, 0, 0.7);
-  min-width: 44px;
-}
-.okBtn.ghost:hover {
-  background: rgba(0, 0, 0, 0.04);
 }
 
 .delBtn {
   background: #b3261e;
   border: none;
   color: #fff;
-  padding: 10px 12px;
+  height: 36px; /* ✅ nhỏ hơn */
+  padding: 0 12px;
   border-radius: 12px;
   cursor: pointer;
   font-weight: 900;
   min-width: 44px;
 }
+.okBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.okBtn.ghost,
+.delBtn.ghost {
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  color: rgba(0, 0, 0, 0.65);
+
+  /* ✅ smaller 50% */
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 12px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 14px;
+}
+.okBtn.ghost:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
 .delBtn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
-.delBtn.ghost {
-  background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.14);
-  color: rgba(0, 0, 0, 0.7);
-}
 .delBtn.ghost:hover {
   background: rgba(179, 38, 30, 0.08);
 }

@@ -1,0 +1,75 @@
+html,
+body {
+  overflow-x: hidden;
+}
+
+/* Shared Memrise-like navbar */
+.nh-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+
+  width: 100%;
+  left: 0;
+  right: 0;
+
+  height: 64px;
+  background: #79e3c3; /* memrise-ish green */
+  color: #123;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 18px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
+}
+
+.nh-topbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.nh-brand {
+  font-weight: 900;
+  letter-spacing: 0.6px;
+  color: #123;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nh-title {
+  font-weight: 900;
+  color: #123;
+  opacity: 0.9;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nh-topbarRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nh-pill {
+  border: 1px solid rgba(0, 0, 0, 0.22);
+  background: rgba(255, 255, 255, 0.25);
+  color: #123;
+  padding: 8px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.nh-pill:hover {
+  background: rgba(255, 255, 255, 0.38);
+}
