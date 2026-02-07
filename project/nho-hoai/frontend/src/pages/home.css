@@ -204,3 +204,11 @@
 .menu-item:hover {
   background: rgba(0, 0, 0, 0.04);
 }
+
+.menu-item.danger {
+  color: #b3261e;
+}
+
+.menu-item.danger:hover {
+  background: rgba(179, 38, 30, 0.08);
+}

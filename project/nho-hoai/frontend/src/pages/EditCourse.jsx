@@ -20,11 +20,13 @@ export default function EditCourse() {
 
   const [term, setTerm] = useState("");
   const [meaning, setMeaning] = useState("");
+  const [note, setNote] = useState("");
 
-  // ✅ inline edit state
+  // inline edit state
   const [editingId, setEditingId] = useState(null);
   const [draftTerm, setDraftTerm] = useState("");
   const [draftMeaning, setDraftMeaning] = useState("");
+  const [draftNote, setDraftNote] = useState("");
 
   function logout() {
     clearToken();
@@ -60,6 +62,7 @@ export default function EditCourse() {
     onSuccess: () => {
       setTerm("");
       setMeaning("");
+      setNote("");
       qc.invalidateQueries({ queryKey: ["cards", deckId] });
       qc.invalidateQueries({ queryKey: ["decks"] });
       qc.invalidateQueries({ queryKey: ["deck", deckId] });
@@ -67,13 +70,26 @@ export default function EditCourse() {
   });
 
   const updateCard = useMutation({
-    mutationFn: ({ cardId, term, meaning }) =>
-      api.patch(`/api/cards/${cardId}/`, { term, meaning }).then((r) => r.data),
+    mutationFn: ({ cardId, term, meaning, note }) =>
+      api
+        .patch(`/api/cards/${cardId}/`, { term, meaning, note })
+        .then((r) => r.data),
     onSuccess: () => {
       setEditingId(null);
       setDraftTerm("");
       setDraftMeaning("");
+      setDraftNote("");
       qc.invalidateQueries({ queryKey: ["cards", deckId] });
+    },
+  });
+
+  const deleteCard = useMutation({
+    mutationFn: (cardId) =>
+      api.delete(`/api/cards/${cardId}/`).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cards", deckId] });
+      qc.invalidateQueries({ queryKey: ["decks"] });
+      qc.invalidateQueries({ queryKey: ["deck", deckId] });
     },
   });
 
@@ -81,6 +97,7 @@ export default function EditCourse() {
     setEditingId(card.id);
     setDraftTerm(card.term || "");
     setDraftMeaning(card.meaning || "");
+    setDraftNote(card.note || "");
   }
 
   const canSave = useMemo(() => {
@@ -89,12 +106,12 @@ export default function EditCourse() {
   }, [editingId, draftTerm, draftMeaning]);
 
   function saveEdit() {
-    if (!editingId) return;
-    if (!canSave) return;
+    if (!editingId || !canSave) return;
     updateCard.mutate({
       cardId: editingId,
       term: draftTerm.trim(),
       meaning: draftMeaning.trim(),
+      note: draftNote, // note can be empty
     });
   }
 
@@ -145,10 +162,11 @@ export default function EditCourse() {
           </button>
         </div>
 
+        {/* Add words */}
         <section className="edit-card">
           <h2 className="section-title">Add words</h2>
 
-          <div className="grid">
+          <div className="grid grid3">
             <div>
               <div className="label">Word</div>
               <input
@@ -169,23 +187,32 @@ export default function EditCourse() {
               />
             </div>
 
-            <div className="actionsCol">
-              <button
-                className="addBtn"
-                onClick={() => addCard.mutate({ term, meaning })}
-                disabled={!canAdd || addCard.isPending}
-                type="button"
-              >
-                {addCard.isPending ? "Adding..." : "Add"}
-              </button>
+            <div>
+              <div className="label">Note</div>
+              <input
+                className="input"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g. quả màu đỏ tròn, vị chua ngọt"
+              />
             </div>
           </div>
+
+          <button
+            className="addBtn addWide"
+            onClick={() => addCard.mutate({ term, meaning, note })}
+            disabled={!canAdd || addCard.isPending}
+            type="button"
+          >
+            {addCard.isPending ? "Adding..." : "Add"}
+          </button>
 
           {addCard.isError && (
             <div className="err">Add failed. Check backend / validation.</div>
           )}
         </section>
 
+        {/* Words table */}
         <section className="edit-card">
           <h2 className="section-title">Words</h2>
 
@@ -210,10 +237,11 @@ export default function EditCourse() {
             !cardsQ.isError &&
             (cardsQ.data || []).length > 0 && (
               <div className="table">
-                <div className="thead thead3">
+                <div className="thead thead4">
                   <div>Word</div>
                   <div>Definition</div>
-                  <div className="right">OK</div>
+                  <div>Note</div>
+                  <div className="right">Actions</div>
                 </div>
 
                 {(cardsQ.data || []).map((c) => {
@@ -222,9 +250,9 @@ export default function EditCourse() {
                   return (
                     <div
                       key={c.id}
-                      className={`trow trow3 ${isEditing ? "editing" : ""}`}
+                      className={`trow trow4 ${isEditing ? "editing" : ""}`}
                     >
-                      {/* Word cell */}
+                      {/* Word */}
                       <div
                         className={`cell editable ${isEditing ? "" : "hoverable"}`}
                         onClick={() => !isEditing && startEdit(c)}
@@ -247,7 +275,7 @@ export default function EditCourse() {
                         )}
                       </div>
 
-                      {/* Definition cell */}
+                      {/* Definition */}
                       <div
                         className={`cell editable ${isEditing ? "" : "hoverable"}`}
                         onClick={() => !isEditing && startEdit(c)}
@@ -269,27 +297,89 @@ export default function EditCourse() {
                         )}
                       </div>
 
-                      {/* OK button */}
-                      <div className="cell right">
+                      {/* Note */}
+                      <div
+                        className={`cell editable ${isEditing ? "" : "hoverable"}`}
+                        onClick={() => !isEditing && startEdit(c)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !isEditing) startEdit(c);
+                        }}
+                        title={!isEditing ? "Click to edit" : ""}
+                      >
                         {isEditing ? (
-                          <button
-                            className="okBtn"
-                            type="button"
-                            onClick={saveEdit}
-                            disabled={!canSave || updateCard.isPending}
-                          >
-                            {updateCard.isPending ? "..." : "OK"}
-                          </button>
+                          <input
+                            className="rowInput"
+                            value={draftNote}
+                            onChange={(e) => setDraftNote(e.target.value)}
+                            placeholder="(optional)"
+                          />
                         ) : (
-                          <button
-                            className="okBtn ghost"
-                            type="button"
-                            onClick={() => startEdit(c)}
-                            title="Edit"
-                          >
-                            ✎
-                          </button>
+                          <span style={{ opacity: c.note ? 1 : 0.55 }}>
+                            {c.note || "—"}
+                          </span>
                         )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="cell right">
+                        <div className="rowActions">
+                          {isEditing ? (
+                            <>
+                              <button
+                                className="okBtn"
+                                type="button"
+                                onClick={saveEdit}
+                                disabled={!canSave || updateCard.isPending}
+                              >
+                                {updateCard.isPending ? "..." : "OK"}
+                              </button>
+
+                              <button
+                                className="delBtn"
+                                type="button"
+                                onClick={() => {
+                                  const ok = window.confirm(
+                                    `Delete this word?\n\n${c.term} → ${c.meaning}`,
+                                  );
+                                  if (!ok) return;
+                                  deleteCard.mutate(c.id);
+                                }}
+                                disabled={deleteCard.isPending}
+                                title="Delete"
+                              >
+                                {deleteCard.isPending ? "..." : "🗑"}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                className="okBtn ghost"
+                                type="button"
+                                onClick={() => startEdit(c)}
+                                title="Edit"
+                              >
+                                ✎
+                              </button>
+                              <button
+                                className="delBtn ghost"
+                                type="button"
+                                onClick={() => {
+                                  const ok = window.confirm(
+                                    `Delete this word?\n\n${c.term} → ${c.meaning}`,
+                                  );
+                                  if (!ok) return;
+                                  deleteCard.mutate(c.id);
+                                }}
+                                disabled={deleteCard.isPending}
+                                title="Delete"
+                              >
+                                🗑
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );

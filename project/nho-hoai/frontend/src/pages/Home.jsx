@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { clearToken } from "../lib/auth";
 import "./home.css";
@@ -11,6 +11,7 @@ function fetchDecks() {
 
 export default function Home() {
   const nav = useNavigate();
+  const qc = useQueryClient();
 
   const {
     data: decks = [],
@@ -40,6 +41,14 @@ export default function Home() {
 
   const [openMenuDeckId, setOpenMenuDeckId] = useState(null);
   const menuRef = useRef(null);
+
+  const deleteDeck = useMutation({
+    mutationFn: (deckId) =>
+      api.delete(`/api/decks/${deckId}/`).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["decks"] });
+    },
+  });
 
   useEffect(() => {
     function onDocClick(e) {
@@ -177,6 +186,7 @@ export default function Home() {
                       >
                         Edit course
                       </button>
+
                       <button
                         className="menu-item"
                         type="button"
@@ -186,6 +196,23 @@ export default function Home() {
                         }}
                       >
                         Study
+                      </button>
+
+                      <button
+                        className="menu-item danger"
+                        type="button"
+                        onClick={() => {
+                          const ok = window.confirm(
+                            `Delete course "${d.title}"?\n\nThis will delete ALL vocabulary in this course.`,
+                          );
+                          if (!ok) return;
+                          setOpenMenuDeckId(null);
+                          deleteDeck.mutate(d.id);
+                        }}
+                        disabled={deleteDeck.isPending}
+                        title="Delete course"
+                      >
+                        {deleteDeck.isPending ? "Deleting..." : "Delete"}
                       </button>
                     </div>
                   )}

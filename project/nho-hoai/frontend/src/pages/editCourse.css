@@ -105,19 +105,20 @@
   font-weight: 900;
 }
 
+/* Inputs grid */
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 140px;
   gap: 12px;
   align-items: end;
 }
+
+/* ✅ 3 columns like screenshot (Word / Definition / Note) */
+.grid3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
 @media (max-width: 900px) {
-  .grid {
+  .grid3 {
     grid-template-columns: 1fr;
-  }
-  .actionsCol {
-    display: flex;
-    justify-content: flex-start;
   }
 }
 
@@ -126,10 +127,11 @@
   opacity: 0.75;
   margin-bottom: 6px;
 }
+
 .input {
   width: 100%;
   border: 1px solid #d9d2c7;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 12px 12px;
   font-size: 14px;
   outline: none;
@@ -139,15 +141,20 @@
   box-shadow: 0 0 0 2px rgba(90, 167, 214, 0.18);
 }
 
+/* ✅ Add button wide (full width) like screenshot */
 .addBtn {
   width: 100%;
   background: #2e7d32;
   border: none;
   color: #fff;
   padding: 12px 12px;
-  border-radius: 12px;
+  border-radius: 16px;
   cursor: pointer;
   font-weight: 900;
+  margin-top: 14px;
+}
+.addWide {
+  width: 100%;
 }
 .addBtn:disabled {
   opacity: 0.55;
@@ -170,26 +177,34 @@
   border-radius: 12px;
   overflow: hidden;
 }
+
 .thead {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   background: rgba(0, 0, 0, 0.04);
   padding: 10px 12px;
   font-weight: 900;
 }
-.thead3 {
-  grid-template-columns: 1fr 1fr 90px;
-}
 
 .trow {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   padding: 10px 12px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
   align-items: center;
 }
-.trow3 {
-  grid-template-columns: 1fr 1fr 90px;
+
+.thead4 {
+  grid-template-columns: 1fr 1fr 1fr 140px;
+}
+.trow4 {
+  grid-template-columns: 1fr 1fr 1fr 140px;
+}
+
+@media (max-width: 900px) {
+  .thead4,
+  .trow4 {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
 }
 
 .cell {
@@ -203,7 +218,7 @@
   font-weight: 900;
 }
 
-/* ✅ Inline edit UX */
+/* Inline edit UX */
 .editable.hoverable {
   cursor: text;
 }
@@ -230,6 +245,14 @@
   box-shadow: 0 0 0 2px rgba(90, 167, 214, 0.18);
 }
 
+/* Action buttons */
+.rowActions {
+  display: inline-flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
 .okBtn {
   background: #2e7d32;
   border: none;
@@ -253,4 +276,28 @@
 }
 .okBtn.ghost:hover {
   background: rgba(0, 0, 0, 0.04);
+}
+
+.delBtn {
+  background: #b3261e;
+  border: none;
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 900;
+  min-width: 44px;
+}
+.delBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.delBtn.ghost {
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  color: rgba(0, 0, 0, 0.7);
+}
+.delBtn.ghost:hover {
+  background: rgba(179, 38, 30, 0.08);
 }

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Card, Deck
+from .models import Card, CardProgress, Deck, StudySession
 
 
 class DeckSerializer(serializers.ModelSerializer):
@@ -30,8 +30,6 @@ class DeckSerializer(serializers.ModelSerializer):
 
 
 class CardSerializer(serializers.ModelSerializer):
-    # deck_id chỉ dùng khi tạo card theo kiểu POST /api/cards/
-    # còn hiện tại app mình tạo card qua /decks/:id/cards/ nên deck_id không bắt buộc
     deck_id = serializers.IntegerField(write_only=True, required=False)
 
     class Meta:
@@ -50,21 +48,54 @@ class CardSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "deck", "created_at", "updated_at"]
 
     def validate(self, attrs):
-        # ⚠️ Khi PATCH, attrs có thể chỉ chứa term hoặc meaning
-        term = attrs.get("term", None)
-        meaning = attrs.get("meaning", None)
+        term = (attrs.get("term") or "").strip()
+        meaning = (attrs.get("meaning") or "").strip()
 
-        # Nếu PATCH chỉ sửa 1 field thì lấy field còn lại từ instance
+        # allow PATCH: fallback to instance values
         if self.instance is not None:
-            if term is None:
-                term = self.instance.term
-            if meaning is None:
-                meaning = self.instance.meaning
-
-        term = (term or "").strip()
-        meaning = (meaning or "").strip()
+            if not term:
+                term = (getattr(self.instance, "term", "") or "").strip()
+            if not meaning:
+                meaning = (getattr(self.instance, "meaning", "") or "").strip()
 
         if not term or not meaning:
             raise serializers.ValidationError("term và meaning không được rỗng.")
-
         return attrs
+
+
+class StudySessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudySession
+        fields = [
+            "id",
+            "deck",
+            "started_at",
+            "ended_at",
+            "total_answered",
+            "correct_count",
+            "wrong_count",
+        ]
+        read_only_fields = fields
+
+
+class CardProgressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CardProgress
+        fields = [
+            "id",
+            "user",
+            "card",
+            "ease",
+            "interval_days",
+            "due_at",
+            "difficulty_score",
+            "lapses",
+            "wrong_streak",
+            "correct_streak",
+            "total_correct",
+            "total_wrong",
+            "last_answered_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
